@@ -348,6 +348,7 @@ def render(lang, title, desc, toggle_href, body, hero_h1=None, hero_lede=None):
 </main>
 {footer(lang)}
 <script src="/assets/site.js"></script>
+<script data-goatcounter="https://ocfoundationconnect.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
 """
