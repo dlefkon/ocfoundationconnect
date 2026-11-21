@@ -13,8 +13,9 @@
      - When set (e.g. "+18455550100"): call buttons become tel: links
        and the number is displayed next to the button text.
 
-   FORM_ENDPOINT: form backend URL, not yet wired.
-     - While empty: submitting a form shows an honest notice that
+   FORM_ENDPOINT: form backend URL (FormSubmit AJAX endpoint, wired
+     Nov 21, 2026). Submissions are emailed to CONTACT_EMAIL.
+     - If emptied again: submitting a form shows an honest notice that
        online requests are not live yet. Nothing is sent, nothing is
        faked, and the visitor is pointed to the contact email.
 
@@ -23,7 +24,7 @@
    --------------------------------------------------------------------- */
 var CONFIG = {
   TRACKING_PHONE: "",
-  FORM_ENDPOINT: "",
+  FORM_ENDPOINT: "https://formsubmit.co/ajax/contact@ocfoundationconnect.com",
   CONTACT_EMAIL: "contact@ocfoundationconnect.com"
 };
 
@@ -110,6 +111,12 @@ var STRINGS = {
     },
     formNotLive: "Online requests open soon — this form is not yet live, and nothing was sent. " +
       "Please check back shortly, or reach us at " + CONFIG.CONTACT_EMAIL + ".",
+    formSending: "Sending your request…",
+    formSuccess: "Thank you — your request was sent. One independent local specialist will " +
+      "call you back at the number you gave. If you don't hear back within one business day, " +
+      "reach us at " + CONFIG.CONTACT_EMAIL + ".",
+    formError: "Something went wrong and your request was not sent. Please try again, " +
+      "or reach us at " + CONFIG.CONTACT_EMAIL + ".",
     pickerCta: "Request a free estimate for this problem",
     taggedAs: "Problem selected:"
   },
@@ -126,6 +133,12 @@ var STRINGS = {
     },
     formNotLive: "Las solicitudes en línea abren pronto: este formulario aún no está activo y no se envió nada. " +
       "Vuelva a intentarlo en breve o escríbanos a " + CONFIG.CONTACT_EMAIL + ".",
+    formSending: "Enviando su solicitud…",
+    formSuccess: "Gracias: su solicitud fue enviada. Un especialista local independiente le " +
+      "llamará al número que indicó. Si no recibe respuesta en un día hábil, " +
+      "escríbanos a " + CONFIG.CONTACT_EMAIL + ".",
+    formError: "Algo salió mal y su solicitud no fue enviada. Inténtelo de nuevo " +
+      "o escríbanos a " + CONFIG.CONTACT_EMAIL + ".",
     pickerCta: "Pedir una cotización gratuita para este problema",
     taggedAs: "Problema seleccionado:"
   }
@@ -226,23 +239,51 @@ var STRINGS = {
       /* Honeypot: a filled honeypot means a bot — quietly stop. */
       var hp = $("input[name='company_website']", form);
       if (hp && hp.value) { ev.preventDefault(); return; }
-      if (!CONFIG.FORM_ENDPOINT) {
-        ev.preventDefault();
-        var notice = $(".form-notice", form);
-        if (!notice) {
-          notice = document.createElement("div");
-          notice.className = "form-notice";
-          notice.setAttribute("role", "status");
-          form.appendChild(notice);
-        }
-        notice.textContent = S.formNotLive;
+      ev.preventDefault();
+      var notice = $(".form-notice", form);
+      if (!notice) {
+        notice = document.createElement("div");
+        notice.className = "form-notice";
+        notice.setAttribute("role", "status");
+        form.appendChild(notice);
+      }
+      function showNotice(text) {
+        notice.textContent = text;
         notice.setAttribute("tabindex", "-1");
         notice.focus({ preventScroll: false });
+      }
+      if (!CONFIG.FORM_ENDPOINT) {
+        showNotice(S.formNotLive);
         return;
       }
-      /* When FORM_ENDPOINT is set, the form posts there normally.
-         TrustedForm certificate URL (see the commented placeholder in
-         the form markup) is included as a hidden field at that point. */
+      /* Post the lead to the form backend (FormSubmit AJAX) as JSON and
+         keep the visitor on the page. TrustedForm certificate URL (see
+         the commented placeholder in the form markup) joins the payload
+         when that account is active. */
+      var data = {};
+      new FormData(form).forEach(function (value, key) {
+        if (key === "company_website") { return; }
+        data[key] = value;
+      });
+      data._subject = "New estimate request — ocfoundationconnect.com";
+      data._template = "table";
+      data._captcha = "false";
+      var btn = $("button[type='submit']", form);
+      if (btn) { btn.disabled = true; }
+      showNotice(S.formSending);
+      fetch(CONFIG.FORM_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(data)
+      }).then(function (res) {
+        if (!res.ok) { throw new Error("form backend " + res.status); }
+        form.reset();
+        showNotice(S.formSuccess);
+      }).catch(function () {
+        showNotice(S.formError);
+      }).then(function () {
+        if (btn) { btn.disabled = false; }
+      });
     });
   });
 
